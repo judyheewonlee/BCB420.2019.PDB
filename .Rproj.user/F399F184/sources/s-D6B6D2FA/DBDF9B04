@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1549143745457.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1994631332",
+    "id" : "DBDF9B04",
+    "lastKnownWriteTime" : 1549142983,
+    "last_content_update" : 1549142983,
+    "path" : "~/Documents/BCB420/DatabaseProject/BCB420.2019.pdb/NAMESPACE",
+    "project_path" : "NAMESPACE",
+    "properties" : {
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_namespace"
+}
