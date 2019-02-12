@@ -18,7 +18,7 @@ fetchPDBXML <- function(myDB) {
   # chain identifier
   chainList <- unique(myDB$pdbChains$ID)
   chainList <- gsub("\\..*", "", chainList)
-  myPDBData <- data.table::data.table()
+  myPDBData <- data.frame()
 
   # Code to split list referenced by
   # https://stackoverflow.com/questions/7060272/split-up-a-dataframe-by-number-of-rows

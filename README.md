@@ -322,7 +322,7 @@ We first fetch all unique HGNC symbols and create a dataframe entry for the data
 
 Once we generate the dataframe containing the HGNC symbols, we map the **transcript IDs** to several HGNC symbols. In this data frame, we will include **Transcript HGNC ID**, **Transcript Stable ID Version**, **Transcript Stable ID**, **Transcript Start**, and **Transcript End** as annotations. Every transcript can have multiple PDB chain IDs and every PDB chain can also have multiple transcripts. We must take this into account when building the database.
 
-After we generate the transcript table, we map the PDB chains to each transcript ID. We also want to add the corresponding HGNC symbols and PDB ID's which will help link transcript/chain level data to gene data. In the data frame containing the PDB chains, we will add the annotations: **PDB-ENSP mapping (chain ID)**, **Transcript HGNC IDs**, **HGNC Symbols**, **PDB IDs** **Sequences** and **Resolutions**. The **Sequence** and **Resolution** will be retrieved through the PDB API services discussed later. 
+After we generate the transcript table, we map the PDB chains to each transcript ID. In the data frame containing the PDB chains, we will add the annotations: **PDB-ENSP mapping (chain ID)**, **Transcript HGNC IDs**, **Sequences** and **Resolutions**. The **Sequence** and **Resolution** will be retrieved through the PDB API services discussed later. 
 
 Lastly, we map each PDB-chain to a PDB ID to the general PDB structure. Oddly, some entries in the BiomaRt dataset have different corresponding chain ID's to the PDB ID. Most cases, the PDB ID corresponds to the PDB chain. For example: 
 
@@ -484,21 +484,18 @@ Each Transcript has several corresponding PDB chains and each PDB chain can be m
 ```R
 addpdbChain <- function(myDB, martDF) {
 
-    # Add the PDB chains and their corresponding
-    # transcript HGNC, HGNC symbols and PDB symbol to the database
+# Add the PDB chains and their corresponding
+# transcript IDs to the database
+pdbChains <- data.frame(ID = martDF$PDB.ENSP.mappings,
+transcriptHGNC =
+martDF$HGNC.transcript.name.ID,
+stringsAsFactors = FALSE)
+pdbChains <- unique(data.table::as.data.table(pdbChains))
 
-    pdbChains <- data.frame(ID = martDF$PDB.ENSP.mappings,
-                    transcriptHGNC =
-                    martDF$HGNC.transcript.name.ID,
-                    HGNC = martDF$HGNC.symbol,
-                    PDB = martDF$PDB.ID,
-                    stringsAsFactors = FALSE)
-    # Use the data.table package in order to call unique quickly over the large dataset
-    pdbChains <- unique(data.table::as.data.table(pdbChains))
-
-    myDB$pdbChains <- as.data.frame(pdbChains)
+myDB$pdbChains <- as.data.frame(pdbChains)
 
 return(myDB)
+
 }
 ```
 &nbsp;
@@ -510,32 +507,33 @@ In order to retrieve the data from PDB, the functions  `readXML()`, `fetchPDBXML
 &nbsp;
 
 ```R
+
 readXML <- function(URL) {
 
-    # Install required dependencies
-    if (!requireNamespace("xml2", quietly = TRUE)) {
-    install.packages("xml2")
-    }
+library(xml2)
 
-    library(xml2)
-
-    myXML <- read_xml(URL)
-    xml_name(myXML)
-    xml_children(myXML)
+myXML <- read_xml(URL)
+xml_name(myXML)
+xml_children(myXML)
 
 
-    myIDnodes <- xml_find_all(myXML, ".//dimEntity.structureId")
-    myResNodes <- xml_find_all(myXML, ".//dimStructure.resolution")
-    myChainNodes <- xml_find_all(myXML, ".//dimEntity.chainId")
-    mySeqNodes <- xml_find_all(myXML, ".//dimEntity.sequence")
+myIDnodes <- xml_find_all(myXML, ".//dimEntity.structureId")
+myResNodes <- xml_find_all(myXML, ".//dimStructure.resolution")
+myChainNodes <- xml_find_all(myXML, ".//dimEntity.chainId")
+mySeqNodes <- xml_find_all(myXML, ".//dimEntity.sequence")
 
-    myData <- data.frame(IDs = as.character(xml_contents(myIDnodes)),
-    Resolution = as.character(xml_contents(myResNodes)),
-    ChainIDs = as.character(xml_contents(myChainNodes)),
-    Sequence = as.character(xml_contents(mySeqNodes)),
-    stringsAsFactors = FALSE)
+myPDBData <- data.frame(IDs =
+paste(tolower(as.character(xml_contents(myIDnodes))),
+as.character(xml_contents(myChainNodes)),
+sep = "."),
+Resolution = as.character(xml_contents(myResNodes)),
+ChainIDs = as.character(xml_contents(myChainNodes)),
+Sequence = as.character(xml_contents(mySeqNodes)),
+stringsAsFactors = FALSE)
 
-return (myData)
+return (myPDBData)
+
+}
 
 }
 
@@ -549,33 +547,32 @@ return (myData)
 ```R
 fetchPDBXML <- function(myDB) {
 
-    # Generate a list of PDB chains, remove the
-    # chain identifier since the XML generated organizes data
-    # by hierarchy (PDB ID is separated from Chain identifier)
-    chainList <- unique(myDB$pdbChains$ID)
-    chainList <- gsub("\\..*", "", chainList)
-    myPDBData <- data.frame()
+# Generate a list of PDB chains, remove the
+# chain identifier
+chainList <- unique(myDB$pdbChains$ID)
+chainList <- gsub("\\..*", "", chainList)
+myPDBData <- data.frame()
 
-    # Code to split list referenced by
-    # https://stackoverflow.com/questions/7060272/split-up-a-dataframe-by-number-of-rows
-    # Split the chainList into sets of 1500 elements to call to PDB
-    chunk <- 1500
-    n <- length(chainList)
-    r  <- rep(1:ceiling(n/chunk),each=chunk)[1:n]
-    sptChainList <- split(chainList, r)
+# Code to split list referenced by
+# https://stackoverflow.com/questions/7060272/split-up-a-dataframe-by-number-of-rows
+# Split the chainList into sets of 1500 elements
+chunk <- 1500
+n <- length(chainList)
+r  <- rep(1:ceiling(n/chunk),each=chunk)[1:n]
+sptChainList <- split(chainList, r)
 
-    # Fetch the XML data for each chain
-    for (i in 1:length(sptChainList)) {
+#Fetch the XML data for each chain
+for (i in 1:length(sptChainList)) {
 
-        url <- paste("https://www.rcsb.org/pdb/rest/customReport.xml?pdbids=",
-        paste(sptChainList[[i]], collapse = ","),
-        "&customReportColumns=structureId,resolution,sequence",
-        sep = "")
-        myRefData <- readXML(url)
-        myPDBData <- rbind(myPDBData, myRefData)
-    }
+url <- paste("https://www.rcsb.org/pdb/rest/customReport.xml?pdbids=",
+paste(sptChainList[[i]], collapse = ","),
+"&customReportColumns=structureId,resolution,sequence",
+sep = "")
+myRefData <- readXML(url)
+myPDBData <- rbind(myPDBData, myRefData)
+}
 
-    return (myPDBData)
+return (myPDBData)
 }
 ```
 &nbsp;
@@ -587,38 +584,22 @@ fetchPDBXML <- function(myDB) {
 ```R
 addPDBdata <- function(myDB) {
 
-    # Call fetchPDBXML to retrieve resolutions and sequences
-    # from PDB
-    myPDBData <- fetchPDBXML(myDB)
+message("Retrieving PDB data...")
+# Call fetchPDBXML to retrieve resolutions and sequences
+# from PDB
+myPDBData <- unique(fetchPDBXML(myDB))
 
-    # Set Resolution and sequence entries to NA for myDB
-    # to remove data.frame errors
-    myDB$pdbChains$Resolution <- NA
-    myDB$pdbChains$Sequences <- NA
+# Set Resolution and sequence
+myDB$pdbChains$Resolution <- NA
+myDB$pdbChains$Sequences <- NA
 
-    # Add the sequence and resolution values into the data frame for 
-    # each corresponding pdb chain. Note this loop take several minutes to
-    # compute.
-    
-    for (chain in myDB$pdbChains$ID) {
-        pdbID <- toupper(gsub("\\..*","", chain))
-        
-        # Find and retrieve the resolution for each PDB ID 
-        # Note that there is only one resolution for each PDB ID
-        resolution <- unique(myPDBData[pdbID
-        == myPDBData$IDs,]$Resolution)
+# Merge the two data frames using match
 
-        # Find and retrieve the unique Sequence for each PDB chain. We search for matching 
-        # PDB ID 
-        # and chain identifier for each row
-        chainSeq <- unique(myPDBData[sub('.*\\.', '', chain) == myPDBData$ChainIDs &
-        pdbID == myPDBData$IDs,]$Sequence)[1]
+sel <- match(myDB$pdbChains$ID, myPDBData$IDs)
+myDB$pdbChains$Resolution <- myPDBData[sel,]$Resolution
+myDB$pdbChains$Sequences <- myPDBData[sel,]$Sequence
 
-        myDB$pdbChains[chain == myDB$pdbChains$ID,]$Resolution <- resolution
-        myDB$pdbChains[chain == myDB$pdbChains$ID,]$Sequences <- chainSeq
-    }
-
-    return(myDB)
+return(myDB)
 
 }
 ```
@@ -869,13 +850,21 @@ xSet <- c("AMBRA1", "ATG14", "ATP2A1", "ATP2A2", "ATP2A3", "BECN1", "BECN2",
 
 # W
 x <- which((xSet %in% myDB$HGNC$ID))
-xSetPDB <- myDB$pdbChains[xSet[x] %in% myDB$pdbChains$transcriptHGNC, c("hgncID", "transcriptHGNC", "ID", "PDB", "Sequences", "Resolution")]
+ xSetPDB <- myDB$Transcripts[match(xSet[x], myDB$Transcripts$hgncID), c("hgncID", "ID")]
+ sel <- match(xSetPDB$ID, myDB$pdbChains$transcriptHGNC)
+ 
+ xSetPDB <- cbind(xSetPDB, chainID = 
+ myDB$pdbChains[sel, "ID"], Sequence = myDB$pdbChains[sel, "Sequences"],
+ Resolution = myDB$pdbChains[sel, "Resolution"])
+ sel <- match(xSetPDB$chainID, myDB$pdbID$chainID)
+ 
+ xSetPDB <- cbind(xSetPDB, PDBID = myDB$pdbID[sel, "ID"])
 
 # Save the annotated set
 
-writeLines(c("a\tb",
-sprintf("%s\t%s\t%s\t%s\t%s\t%s\n", xSetPDB$hgncID, xSetPDB$transcriptHGNC, xSetPDB$ID, xSetPDB$PDB, xSetPDB$Sequences, xSetPDB$Resolution)),
-con = "xSetPDB.tsv")
+writeLines(c("hgncID\t chainID\t PDBID\t Sequence\t Resolution",
+             sprintf("%s\t%s\t%s\t%s\t%s\t%s\n", xSetPDB$hgncID, xSetPDB$ID, xSetPDB$chainID, xSetPDB$PDBID, xSetPDB$Sequence, xSetPDB$Resolution)),
+             con = "inst/extdata/xSetPDB.tsv")
 
 # The data set can be read back in again (in an RStudio session) with
 myXset <- read.delim(file.path("inst", "extdata", "xSetPDB.tsv"),

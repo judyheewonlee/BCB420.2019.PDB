@@ -25,7 +25,10 @@ readXML <- function(URL) {
   myChainNodes <- xml_find_all(myXML, ".//dimEntity.chainId")
   mySeqNodes <- xml_find_all(myXML, ".//dimEntity.sequence")
 
-  myPDBData <- data.table::data.table(IDs = as.character(xml_contents(myIDnodes)),
+  myPDBData <- data.frame(IDs =
+                          paste(tolower(as.character(xml_contents(myIDnodes))),
+                                as.character(xml_contents(myChainNodes)),
+                                sep = "."),
                           Resolution = as.character(xml_contents(myResNodes)),
                           ChainIDs = as.character(xml_contents(myChainNodes)),
                           Sequence = as.character(xml_contents(mySeqNodes)),

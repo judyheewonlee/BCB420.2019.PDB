@@ -18,8 +18,6 @@ addpdbChain <- function(myDB, martDF) {
   pdbChains <- data.frame(ID = martDF$PDB.ENSP.mappings,
                           transcriptHGNC =
                             martDF$HGNC.transcript.name.ID,
-                          hgncID = martDF$HGNC.symbol,
-                          PDB = martDF$PDB.ID,
                           stringsAsFactors = FALSE)
   pdbChains <- unique(data.table::as.data.table(pdbChains))
 
