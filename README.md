@@ -1,6 +1,6 @@
-## PDB Dataproject
+# `BCB420.2019.PDB`
 
-###  PDB Dataproject for BCB420 2019
+###  PDB Dataproject for BCB420 2019 (PDB data annotatation of human genes)
 
 -----------------------------------------------
 
@@ -10,10 +10,6 @@ Versions: 1.0
 
 -----------------------------------------------
 
-
-This package describes the workflow and relation between the PDB database from the PDB database and how to map the PDB IDs to HGNC symbols. It takes into account the PDB ID along with the corresponding transcripts and HGNC symbls and HGNC transcripts. The biggest part of this code is representing the relations between PDB chains and how they map to specific HGNC transcripts and symbols.
-
-----------------------------------------------
 This package follows the structure and process 
 suggested by Hadley Wickham in:
 
@@ -36,9 +32,6 @@ Check Package:             'Cmd + Shift + E'
 Load the package with:  
 devtools::install_github("judyheewonlee/BCB420.2019.PDB")
 
-# `BCB420.2019.PDB`
-
-#### (PDB data annotatation of human genes)
 
 &nbsp;
 
@@ -61,22 +54,26 @@ The package serves dual duty, as an RStudio project, as well as an R package tha
 #### In this project ...
 
 ```text
---BCB420.2019.STRING/
+--BCB420.2019.PDB/
 |__.gitignore
 |__.Rbuildignore
-|__BCB420.2019.STRING.Rproj
-|__DESCRIPTION
-|__dev/
-|__rptTwee.R
-|__toBrowser.R               # display .md files in your browser
+|__BCB420.2019.PDB.Rproj
+|__DESCRIPTION              
 |__inst/
-|__extdata/
-|__ensp2sym.RData         # ENSP ID to HGNC symbol mapping tool
+|__extdata/               # ENSP ID to HGNC symbol mapping tool
 |__xSetEdges.tsv          # annotated example edges
 |__img/
 |__[...]                  # image sources for .md document
 |__scripts/
-|__recoverIDs.R           # utility to use biomaRt for ID mapping
+|__PDBdataset.R           # utilities for ID mapping, more details below
+|__getData.R
+|__addHGNC.R
+|__addTranscripts.R
+|__addpdbChain.R
+|__addPDB.R
+|__addPDBData.R
+|__fetchPDBXML.R
+|__validate.R      
 |__LICENSE
 |__NAMESPACE
 |__R/
@@ -176,12 +173,23 @@ STRING network nodes are Ensembl protein IDs. These can usually be mapped to HGN
 
 To begin, we need to make sure the required packages are installed:
 
+**`data.table`** provides functions to manipulate and create `data.table` objects in R. This package is used in order to use the function `unique()` on data.table objects over data.frame objects to produce a significantly faster runtime.
+
+&nbsp;
+```R
+if (!requireNamespace("data.table", quietly = TRUE)) {
+    install.packages("data.table")
+}
+```
+
+&nbsp;
+
 **`xml2`** provides functions to read XML formatted data. This package will be used in order to retrieve sequence and resolution annotations of each transcript from the PDB RESTful API services.
 &nbsp;
 
 ```R
 if (!requireNamespace("xml2", quietly = TRUE)) {
-install.packages("xml2")
+    install.packages("xml2")
 }
 ```
 
@@ -190,10 +198,10 @@ install.packages("xml2")
 
 ```R
 if (! requireNamespace("BiocManager", quietly = TRUE)) {
-install.packages("BiocManager")
+    install.packages("BiocManager")
 }
 if (!requireNamespace("rtracklayer", quietly = TRUE)) {
-BiocManager::install("rtracklayer")
+    BiocManager::install("rtracklayer")
 }
 
 }
@@ -205,10 +213,10 @@ the annotation framwork for model organism genomes at the EBI. It is a Bioconduc
 
 ```R
 if (! requireNamespace("BiocManager", quietly = TRUE)) {
-install.packages("BiocManager")
+    install.packages("BiocManager")
 }
 if (! requireNamespace("biomaRt", quietly = TRUE)) {
-BiocManager::install("biomaRt")
+    BiocManager::install("biomaRt")
 }
 ```
 
@@ -217,10 +225,10 @@ BiocManager::install("biomaRt")
 
 ```R
 if (! requireNamespace("BiocManager", quietly = TRUE)) {
-install.packages("BiocManager")
+    install.packages("BiocManager")
 }
 if (!requireNamespace("msa", quietly = TRUE)) {
-BiocManager::install("msa", version = "3.8")
+    BiocManager::install("msa", version = "3.8")
 }
 ```
 
@@ -230,7 +238,7 @@ compute some statistics on the STRING- and example graphs and plot.
 
 ```R
 if (! requireNamespace("igraph")) {
-install.packages("igraph")
+    install.packages("igraph")
 }
 ```
 
@@ -250,7 +258,6 @@ source("inst/scripts/addpdbChain.R")
 source("inst/scripts/addPDB.R")
 source("inst/scripts/addPDBData.R")
 source("inst/scripts/fetchPDBXML.R")
-source("inst/scripts/getGencode.R")
 source("inst/scripts/validate.R")
 ```
 
@@ -273,10 +280,10 @@ Nonetheless, there will be a walkthrough of each function below showing the work
 # Read the biomaRt Ensembl data from the data directory and create a dataframe
 
 martFile <- file.path("../data", "mart_export.txt")
-myDF <- read.csv(martFile)
+martDFall <- read.csv(martFile)
 
 # what does each row look like?
-myDF[1,]
+martDFall[1,]
 # Gene.stable.ID Transcript.stable.ID Gene.stable.ID.version Transcript.stable.ID.version  # Transcript.start..bp.
 # 1 ENSG00000198888      ENST00000361390      ENSG00000198888.2                 
 # ENST00000361390.2                  3307
@@ -294,26 +301,26 @@ myDF[1,]
 
 # We want to remove any sapien genes that do not have a HGNC symbol
 # or PDB entry or PDB chain mappings
-myDF <- myDF[(("" != myDF$HGNC.symbol) & ("" != myDF$Transcript.stable.ID)
-& ("" != myDF$PDB.ENSP.mappings)),]
+martDF <- martDF[(("" != martDF$HGNC.symbol) & ("" != martDF$Transcript.stable.ID)
+& ("" != martDF$PDB.ENSP.mappings)),]
 
 # how many unique HGNC IDs do we have to map?
-uHGNC <- unique(myDF$HGNC.symbol)  # 799 HGNC IDs need to be mapped
+uHGNC <- unique(martDF$HGNC.symbol)  # 2554 HGNC IDs need to be mapped
 
 # how many unique transcript IDs do we have to map?
-uTranscript <- unique(myDF$Transcript.stable.ID) # 1158 Transcript IDs need to be mapped
+uTranscript <- unique(martDF$Transcript.stable.ID) # 3783 Transcript IDs need to be mapped
 
 # how many unique PDB chain IDs do we have to map?
-uPDBchains <- unique(myDF$PDB.ENSP.mappings) # 12006 
+uPDBchains <- unique(martDF$PDB.ENSP.mappings) # 37329 
 
 # how many unique PDB IDs do we have to map?
-uPDB <- unique(myDF$PDB.ID) # 5722
+uPDB <- unique(martDF$PDB.ID) # 16911
 
 ```
 
 &nbsp;
 
-#### 4.2  Step two: mapping via biomaRt
+#### 4.2  Step two: mapping and annotating via biomaRt
 
 We first fetch all unique HGNC symbols and create a dataframe entry for the database containing the HGNC symbols with the corresponding annotations: **HGNC symbol**, **Gene Description**, **Gene Stable ID**, **Gene Stable ID Version**, and **Gene name**. Every HGNC symbol can map to a large number of transcripts, as genes are constructed from many transcripts. Thus every HGNC symbol will have multiple transcripts but each transcript will only map to a single HGNC symbol. 
 
@@ -342,463 +349,477 @@ We will dicuss the problems and the solutions in retrieving this information and
 # Note that the number of entries does not reflect the number of HGNC symbols. 
 # There are many different combinations of transcripts and PDB chains that produce the high # level of entries in this dataset
 
-```
-&nbsp;
+# To begin construction of the dataset, we will begin with creating the database. Below is # the general function to create the database:
 
+PDBdataset <- function() {
 
+# Fetch Data from ensembl and retrieve a dataframe
+martDF <- getData()
 
-&nbsp;
+message("Building the database...")
+# Build the database
+myDB <- list()
+myDB <- addHGNC(myDB, martDF)
+myDB <- addTranscripts(myDB, martDF)
 
-**(1)** There might be more than one value returned. The ID appears more than
-once in `tmp$ensembl_peptide_id`, with different mapped symbols.
+message("Adding PDB chains...")
+myDB <- addpdbChain(myDB, martDF)
 
-```R
-sum(duplicated(tmp$ensembl_peptide_id))  # Indeed: three duplicates!
-```
+message("Adding PDB IDS ...")
+myDB <- addPDB(myDB, martDF)
+myDB <- addPDBdata(myDB)
 
-&nbsp;
+message("Database successfully generated!")
 
-**(2)** There might be nothing returned for one ENSP ID. We have the ID in `uENSP`, but it does not appear in `tmp$ensembl_peptide_id`:
+return(myDB)
 
-```R
-
-sum(! (uENSP) %in% tmp$ensembl_peptide_id)  # 248
-```
-&nbsp;
-
-**(3)** There might be no value returned: `NA`, or `""`. The ID appears in `tmp$ensembl_peptide_id`, but there is no symbol in `tmp$hgnc_symbol`.
-
-```R
-sum(is.na(ensp2sym$sym))  # 0
-sum(ensp2sym$sym == "")   # 199 - note: empty strings for absent symbols.
-```
-
-&nbsp;
-
-Let's fix the "duplicates" problem first. We can't have duplicates: if we encounter an ENSP ID, we need exactly one symbol assigned to it. What are these genes?
-
-&nbsp;
-
-```R
-
-dupEnsp <- tmp$ensembl_peptide_id[duplicated(tmp$ensembl_peptide_id)]
-tmp[tmp$ensembl_peptide_id %in% dupEnsp, ]
-
-#                  ensp      sym
-# 8668  ENSP00000344961  PLEKHG7
-# 8669  ENSP00000344961 C12orf74
-# 14086 ENSP00000380933  PLEKHG7
-# 14087 ENSP00000380933 C12orf74
-# 18419 ENSP00000480558   CCL3L3
-# 18420 ENSP00000480558   CCL3L1
-
-# ENSP00000380933 and ENSP00000344961 should both map to PLEKHG7
-# CCL3L3 and CCL3L3 both have UniProt ID P16619, we map ENSP00000480558
-# (arbitrarily) to CCL3L1
-
-# validate target rows
-tmp[tmp$hgnc_symbol %in% c("C12orf74", "CCL3L3"), ]
-
-# remove target rows
-tmp <- tmp[ ! (tmp$hgnc_symbol %in% c("C12orf74", "CCL3L3")), ]
-
-# check result
-any(duplicated(tmp$ensembl_peptide_id))   # now FALSE
-```
-
-&nbsp;
-
-After this preliminary cleanup, defining the mapping tool is simple:
-
-&nbsp;
-
-```R
-ensp2sym <- tmp$hgnc_symbol
-names(ensp2sym) <- tmp$ensembl_peptide_id
-
-head(ensp2sym)
-# ENSP00000216487 ENSP00000075120 ENSP00000209884  
-#        "RIN3"        "SLC2A3"        "KLHL20"   
-#        
-# ENSP00000046087 ENSP00000205214 ENSP00000167106
-#      "ZPBP"         "AASDH"         "VASH1"
-
-```
-
-&nbsp;
-
-###### 4.2.2  Cleanup and validation of `ensp2sym`
-
-There are two types of IDs we need to process further: (1), those that were not returned at all from biomaRt, (2) those for which only an empty string was returned.
-
-First, we add the symbols that were not returned by biomaRt to the map. They are present in uENSP, but not in ensp2sym$ensp:
-
-&nbsp;
-
-```R
-sel <- ! (uENSP %in% names(ensp2sym))
-x <- rep(NA, sum( sel))
-names(x) <- uENSP[ sel ]
-
-# confirm uniqueness
-any(duplicated(c(names(x), names(ensp2sym))))  # FALSE
-
-# concatenate the two vectors
-ensp2sym <- c(ensp2sym, x)
-
-# confirm
-all(uENSP %in% names(ensp2sym))  # TRUE
-```
-
-&nbsp;
-
-Next, we set the symbols for which only an empty string was returned to `NA`:
-
-&nbsp;
-
-```R
-sel <- which(ensp2sym == "") # 199 elements
-ensp2sym[head(sel)] # before ...
-ensp2sym[sel] <- NA
-ensp2sym[head(sel)] # ... after
-
-# Do we still have all ENSP IDs accounted for?
-all( uENSP %in% names(ensp2sym))  # TRUE
-
-```
-
-&nbsp;
-
-###### 4.2.3  Additional symbols
-
-A function for using biomaRt for more detailed mapping is in the file `inst/scripts/recoverIds.R`. We have loaded it previously, and use it on all elements of `ensp2sym` that are `NA`.
-
-&nbsp;
-
-```R
-
-# How many NAs are there in "ensp2sym" column?
-sum(is.na(ensp2sym))   # 447
-
-# subset the ENSP IDs
-unmappedENSP <- names(ensp2sym)[is.na(ensp2sym)]
-
-# use our function recoverIDs() to try and map the unmapped ensp IDs
-# to symboils via other cross-references
-recoveredENSP <- recoverIDs(unmappedENSP)
-
-# how many did we find
-nrow(recoveredENSP)  # 11. Not much, but it's honest work.
-
-# add the recovered symbols to ensp2sym
-ensp2sym[recoveredENSP$ensp] <- recoveredENSP$sym
-
-# validate:
-sum(is.na(ensp2sym))  # 436 - 11 less than 447
-
-```
-
-&nbsp;
-
-#### 4.4  Step four: outdated symbols
-
-We now have each unique ENSP IDs represented once in our mapping table. But are these the correct symbols? Or did biomaRt return obsolete names for some? We need to compare the symbols to our reference data and try to fix any problems. Symbols that do not appear in the reference table will also be set to NA.
-
-&nbsp;
-
-```R
-# are all symbols present in the reference table?
-sel <- ( ! (ensp2sym %in% HGNC$sym)) & ( ! (is.na(ensp2sym)))
-length(        ensp2sym[ sel ] )  # 137 unknown
-length( unique(ensp2sym[ sel ]))  # they are all unique
-
-# put these symbols in a new dataframe
-unkSym <- data.frame(unk = ensp2sym[ sel ],
-new = NA,
-stringsAsFactors = FALSE)
-
-# Inspect:
-# several of these are formatted like "TNFSF12-TNFSF13" or "TMED7-TICAM2".
-# This looks like biomaRt concatenated symbol names.
-grep("TNFSF12", HGNC$sym) # 23984: TNFSF12
-grep("TNFSF13", HGNC$sym) # 23985 23986: TNFSF13 and TNFSF13B
-grep("TMED7",   HGNC$sym) # 23630: TMED7
-grep("TICAM2",  HGNC$sym) # 23494: TICAM2
-
-# It's not clear why this happened. We will take a conservative approach
-# and not make assumptions which of the two symbols is the correct one,
-# i.e. we will leave these symbols as NA
-
-
-# grep() for the presence of the symbols in either HGNC$prev or
-# HGNC$synonym. If either is found, that symbol replaces NA in unkSym$new
-for (i in seq_len(nrow(unkSym))) {
-iPrev <- grep(unkSym$unk[i], HGNC$prev)[1] # take No. 1 if there are several
-if (length(iPrev) == 1) {
-unkSym$new[i] <- HGNC$sym[iPrev]
-} else {
-iSynonym <- which(grep(unkSym$unk[i], HGNC$synonym))[1]
-if (length(iSynonym) == 1) {
-unkSym$new[i] <- HGNC$sym[iSynonym]
-}
-}
 }
 
-# How many did we find?
-sum(! is.na(unkSym$new))  # 32
-
-# We add the contents of unkSym$new back into ensp2sym. This way, the
-# newly mapped symbols are updated, and the old symbols that did not
-# map are set to NA.
-
-ensp2sym[rownames(unkSym)] <- unkSym$new
-
+# [END]
 
 ```
 
-#### 4.5 Final validation
+&nbsp;
 
-Validation and statistics of our mapping tool:
+Each of the functions in `PDBdataset` generates all the necessary dataframes and returns the final dataset. Each funtion will be discussed below. Note: The `getData()` function simply runs the code to read the `mart_export.txt` file discussed in **section 4.1**. It returns the mart data as a full dataframe.
+
+&nbsp;
 
 ```R
 
-# do we now have all ENSP IDs mapped?
-all(uENSP %in% names(ensp2sym))  # TRUE
+getData <- function() {
 
-# how many symbols did we find?
-sum(! is.na(ensp2sym))  # 18845
+message("Reading Ensembl data...")
+martFile <- file.path("../data", "mart_export.txt")
 
-# (in %)
-sum(! is.na(ensp2sym)) * 100 / length(ensp2sym)  # 96.0 %
+martDF <- read.csv(martFile, stringsAsFactors = FALSE)
 
-# are all symbols current in our reference table?
-all(ensp2sym[! is.na(ensp2sym)] %in% HGNC$sym)  # TRUE
+# Remove any sapien genes that do not have a HGNC symbol
+# or PDB entry
+martDF <- martDF[(("" != martDF$HGNC.symbol) & ("" != martDF$HGNC.transcript.name.ID)
+& ("" != martDF$PDB.ENSP.mappings)),]
+
+return(martDF)
+
+}
+
+```
+
+&nbsp;
+
+###### 4.2.2  Constructing the HGNC dataframe
+
+&nbsp;
+
+Each HGNC symbol will be placed as a unique entry into `myDB` and will contain annotations for each symbol. 
+
+```R
+addHGNC <- function(myDB, martDF) {
+
+    # Here we want to remove any duplicated HGNC symbols since we want to map 
+    # the unique HGNC symbols. 
+    geneRows <- martDF[!duplicated(martDF$HGNC.symbol),]
+
+    # We generate a dataframe containing the HGNC symbol (which will be used to map 
+    # the symbols with the transcript HGNC symbols) and the corresponding annotations.
+    myDB$HGNC <- data.frame(ID = geneRows$HGNC.symbol,
+    description = geneRows$Gene.description,
+    stableID = geneRows$Gene.stable.ID,
+    version = geneRows$Gene.stable.ID.version,
+    name = geneRows$Gene.name,
+    stringsAsFactors = FALSE)
+
+    # Finally we return the modified database.
+    return (myDB)
+}
+
+```
+
+###### 4.2.3  Constructing the Transcript HGNC ID dataframe
+
+&nbsp;
+
+For mapping transcripts, we come across the problem with duplications. Every HGNC symbol can have more than one transcript ID, but every transcript maps to a unique HGNC symbol. How do we prove this? We can retrieve each row with a unique transcript in the data frame retrieved from the BiomaRt data and get each HGNC symbol corresponding to each transcript. Then we can see if all HGNC symbols are contained in the set of unique HGNC symbols for the whole dataset from BiomaRt.
+
+```R
+
+# Retrieve the unique rows of transcript IDs
+uTranscriptTable <- martDF[unique(martDF$Transcript.stable.ID),]
+
+# Test to see if all unique transcript HGNC symbols are in uHGNC. uHGNC defined in section # 4.1 of the read me
+all(uTranscriptTable$HGNC.symbol %in% uHGNC)
+
+# [1] TRUE
+
+```
+&nbsp;
+
+Since this is true, we can call the `addTranscript()` function which adds the dataframe for each unique transcript ID from the `martDF`
+
+```R
+addTranscripts <- function(myDB, martDF) {
+
+    # Retrieve rows with unduplicated transcript IDs
+    geneRows <- martDF[!duplicated(martDF$Transcript.stable.ID),]
+    
+    # Build the dataframe with annotations for each transcript
+    myDB$Transcripts <- data.frame(ID = geneRows$HGNC.transcript.name.ID,
+    version = geneRows$Transcript.stable.ID.version,
+    hgncID = geneRows$HGNC.symbol,
+    stableID = geneRows$Transcript.stable.ID,
+    start = geneRows$Transcript.start..bp,
+    end = geneRows$Transcript.end..bp,
+    stringsAsFactors = FALSE)
+
+    return(myDB)
+
+}
+```
+&nbsp;
+
+###### 4.2.4  Constructing the PDB Chain ID dataframe
+
+&nbsp;
+
+Each Transcript has several corresponding PDB chains and each PDB chain can be mapped to multiple transcripts. Therefore, each entry for the PDB chain must be added to the dataframe in order to map them to the correct transcripts. There may be duplicated entries due to annotations, but they are removed using the `unique()` function. The code for `addpdbChains()` is shown below:
+
+&nbsp;
+
+```R
+addPdbChain <- function(myDB, martDF) {
+
+    # Add the PDB chains and their corresponding
+    # transcript IDs to the database
+
+    pdbChains <- data.frame(ID = martDF$PDB.ENSP.mappings,
+                            transcriptHGNC =
+                            martDF$HGNC.transcript.name.ID,
+                            stringsAsFactors = FALSE)
+                            
+    # Use the data.table package in order to call unique quickly over the large dataset
+    pdbChains <- unique(data.table::as.data.table(pdbChains))
+
+    myDB$pdbChains <- as.data.frame(pdbChains)
+
+return(myDB)
+}
+```
+&nbsp;
+
+By calling `unique` we remove redundancy of adding several of the same data into the dataframe. The PDB chain dataframe is further extended by adding **Sequence** and **Resolution** annotations retrieved from the PDB database.
+
+In order to retrieve the data from PDB, the functions  `readXML()`, `fetchPDBXML()` and `addPDBdata()` have been developed and are shown below:
+
+&nbsp;
+
+```R
+readXML <- function(URL) {
+
+    # Install required dependencies
+    if (!requireNamespace("xml2", quietly = TRUE)) {
+    install.packages("xml2")
+    }
+
+    library(xml2)
+
+    myXML <- read_xml(URL)
+    xml_name(myXML)
+    xml_children(myXML)
+
+
+    myIDnodes <- xml_find_all(myXML, ".//dimEntity.structureId")
+    myResNodes <- xml_find_all(myXML, ".//dimStructure.resolution")
+    myChainNodes <- xml_find_all(myXML, ".//dimEntity.chainId")
+    mySeqNodes <- xml_find_all(myXML, ".//dimEntity.sequence")
+
+    myData <- data.frame(IDs = as.character(xml_contents(myIDnodes)),
+    Resolution = as.character(xml_contents(myResNodes)),
+    ChainIDs = as.character(xml_contents(myChainNodes)),
+    Sequence = as.character(xml_contents(mySeqNodes)),
+    stringsAsFactors = FALSE)
+
+return (myData)
+
+}
+
+```
+&nbsp;
+
+`readXML()` is a function that takes a `URL` path to an XML file (in this case a XML path to PDB's API services) and retrieves defined nodes and converts the data into a dataframe. `fetchPDBXML()` is the function that calls `readXML()` and is also shown below:
+
+&nbsp;
+
+```R
+fetchPDBXML <- function(myDB) {
+
+    # Generate a list of PDB chains, remove the
+    # chain identifier since the XML generated organizes data
+    # by hierarchy (PDB ID is separated from Chain identifier)
+    chainList <- unique(myDB$pdbChains$ID)
+    chainList <- gsub("\\..*", "", chainList)
+    myPDBData <- data.frame()
+
+    # Code to split list referenced by
+    # https://stackoverflow.com/questions/7060272/split-up-a-dataframe-by-number-of-rows
+    # Split the chainList into sets of 1500 elements to call to PDB
+    chunk <- 1500
+    n <- length(chainList)
+    r  <- rep(1:ceiling(n/chunk),each=chunk)[1:n]
+    sptChainList <- split(chainList, r)
+
+    # Fetch the XML data for each chain
+    for (i in 1:length(sptChainList)) {
+
+        url <- paste("https://www.rcsb.org/pdb/rest/customReport.xml?pdbids=",
+        paste(sptChainList[[i]], collapse = ","),
+        "&customReportColumns=structureId,resolution,sequence",
+        sep = "")
+        myRefData <- readXML(url)
+        myPDBData <- rbind(myPDBData, myRefData)
+    }
+
+    return (myPDBData)
+}
+```
+&nbsp;
+
+`fetchPDBXML()` takes the database being developed and produces a data frame which contains the **PDB ID**, **Resolution** and **Sequence** for each chain in `martDF`.  `addPDBdata` is the function that calls `fetchPDBXML()`  and is shown below:
+
+&nbsp;
+
+```R
+addPDBdata <- function(myDB) {
+
+    # Call fetchPDBXML to retrieve resolutions and sequences
+    # from PDB
+    myPDBData <- fetchPDBXML(myDB)
+
+    # Set Resolution and sequence entries to NA for myDB
+    # to remove data.frame errors
+    myDB$pdbChains$Resolution <- NA
+    myDB$pdbChains$Sequences <- NA
+
+    # Add the sequence and resolution values into the data frame for 
+    # each corresponding pdb chain. Note this loop take several minutes to
+    # compute.
+    
+    for (chain in myDB$pdbChains$ID) {
+        pdbID <- toupper(gsub("\\..*","", chain))
+        
+        # Find and retrieve the resolution for each PDB ID 
+        # Note that there is only one resolution for each PDB ID
+        resolution <- unique(myPDBData[pdbID
+        == myPDBData$IDs,]$Resolution)
+
+        # Find and retrieve the unique Sequence for each PDB chain. We search for matching 
+        # PDB ID 
+        # and chain identifier for each row
+        chainSeq <- unique(myPDBData[sub('.*\\.', '', chain) == myPDBData$ChainIDs &
+        pdbID == myPDBData$IDs,]$Sequence)[1]
+
+        myDB$pdbChains[chain == myDB$pdbChains$ID,]$Resolution <- resolution
+        myDB$pdbChains[chain == myDB$pdbChains$ID,]$Sequences <- chainSeq
+    }
+
+    return(myDB)
+
+}
+```
+Once these function calls are completed, the data table for Transcripts is completed with it's full annotations. 
+
+&nbsp;
+
+###### 4.2.5  Constructing the PDB ID dataframe
+
+The PDB dataframe is quite simple since it simply links each PDB ID with the corresponding PDB ID according to BiomaRt's data. As earlier said, there is a problem where BiomaRt maps a PDB chain with a different PDB ID for several entries. It is evident that some PDB ID's are identical in structure but are given different PDB ID's depending on the environmental and conformational effects. This means that PDB chains with different PDB ID identifiers are most likely from a structurally identical protein. BiomaRt may have done this in order to associate PDB chains with higher resolution structures. Therefore, when constructing the PDB chain table and retrieving resolution data, the PDB chain was used to find the resolution of the structure and not the PDB ID. 
+
+In order to construct the PDB dataframe, the function `addPDB()` is called.
+
+```R
+addPDB <- function(myDB, martDF) {
+
+    # Add the PDB IDs and their corresponding
+    # PDB chains to the database
+
+    pdbIDs <- data.frame(ID = martDF$PDB.ID,
+    chainID = martDF$PDB.ENSP.mappings,
+    stringsAsFactors = FALSE)
+
+    # Call the data.table package again in order to find unique entries quickly
+    pdbIDs <- unique(data.table::as.data.table(pdbIDs))
+
+    myDB$pdbID <- as.data.frame(pdbIDs)
+
+    return(myDB)
+
+}
+
+```
+
+&nbsp;
+
+After these functions are called, the dataset is completed. We can now test for validation of the dataset using different function calls and tests.
+
+&nbsp;
+
+#### 4.3 Final validation or mapping
+
+Validation and statistics of our mapping:
+
+```R
+
+# do we now have all HGNC symbols mapped?
+all(uHGNC %in% myDB$HGNC$ID)  # TRUE
+
+# do we now have all Transcript IDs mapped?
+all(uTranscript %in% myDB$Transcripts$ID)  # TRUE
+
+# do we now have all PDB chain IDs mapped?
+all(uPDBchains %in% myDB$pdbChains$ID)  # TRUE
+
+# do we now have all HGNC symbols mapped?
+all(uHGNC %in% myDB$HGNC$ID)  # TRUE
+
+# How many HGNC symbols did we miss from the original Ensembl Dataset?
+
+length(unique(martDFall$HGNC.symbol)) # 2554
+length(unique(myDB$HGNC$ID) #  2554, 100% of the HGNC symbols were mapped
+
+# How many transcripts did we miss?
+
+length(unqiue(martDFall$HGNC.Transcript.name.ID)) #3782
+length(unique(myDB$Transcripts$ID)) # 3782, 100% of transcripts were mapped
+
+# How many PDB chains did we miss?
+
+length(unique(martDFall$PDB.ENSP.mappings) # 37329
+length(unique(myDB$pdbChains$ID)) # 37329, 100% of PDB chains were mapped
+
+# How many PDB IDs did we miss?
+
+length(unique(martDF2$PDB.ID)) # 16911
+length(unique(myDB$pdbID$ID)) # 16911, 100% of PDB ID's were mapped
+
+# This data makes sense since the PDB is consistent with Ensembl data
+
 
 # Done.
-# This concludes construction of our mapping tool.
-# Save the map:
+# This concludes construction of the database with mapping and annotations
 
-save(ensp2sym, file = file.path("inst", "extdata", "ensp2sym.RData"))
+save(myDB, file = file.path("inst", "extdata", "pdb2sym.RData"))
 
 # From an RStudio project, the file can be loaded with
-load(file = file.path("inst", "extdata", "ensp2sym.RData"))
+load(file = file.path("inst", "extdata", "pdb2sym.RData"))
 
 
 ```
-
 &nbsp;
 
-# 5 Annotating gene sets with STRING Data
+## 6 Biological Validation for Annotations: Multiple Sequence Alignments and Coordinate Checking
 
-Given our mapping tool, we can now annotate gene sets with STRING data. As a first example, we analyze the entire STRING graph. Next, we use high-confidence edges to analyze the network of our example gene set.
-
-
-&nbsp;
-
-```R
-
-# Read the interaction graph data: this is a weighted graph defined as an
-# edge list with gene a, gene b, confidence score (0, 999).
-
-tmp <- readr::read_delim(file.path("../data", "9606.protein.links.v11.0.txt"),
-delim = " ",
-skip = 1,
-col_names = c("a", "b", "score"))  # 11,759,454 rows
-
-# do they all have the right tax id?
-all(grepl("^9606\\.", tmp$a))  # TRUE
-all(grepl("^9606\\.", tmp$b))  # TRUE
-# remove "9606." prefix
-tmp$a <- gsub("^9606\\.", "", tmp$a)
-tmp$b <- gsub("^9606\\.", "", tmp$b)
-
-# how are the scores distributed?
-
-minScore <- 0
-maxScore <- 1000
-# we define breaks to lie just below the next full number
-hist(tmp$score[(tmp$score >= minScore) & (tmp$score <= maxScore)],
-xlim = c(minScore, maxScore),
-breaks = c((seq(minScore, (maxScore - 25), by = 25) - 0.1), maxScore),
-main = "STRING edge scores",
-col = colorRampPalette(c("#FFFFFF","#8888A6","#FF6655"), bias = 2)(40),
-xlab = "scores: (p * 1,000)",
-ylab = "p",
-xaxt = "n")
-axis(1, at = seq(minScore, maxScore, by = 100))
-abline(v = 900, lwd = 0.5)
-
-```
-
-![](./inst/img/score_hist_1.svg?sanitize=true "STRING score distribution")
-
-We know that "channel 7 - databases" interactions are arbitrarily scored as _p_ = 0.9. This is clearly reflected in the scores distribution.
-
-```R
-# Zoom in
-
-minScore <- 860
-maxScore <- 1000
-hist(tmp$score[(tmp$score >= minScore) & (tmp$score <= maxScore)],
-xlim = c(minScore, maxScore),
-breaks = c((seq(minScore, (maxScore - 4), by = 4) - 0.1), maxScore),
-main = "STRING edge scores",
-col = colorRampPalette(c("#FFFFFF","#8888A6","#FF6655"), bias = 1.2)(35),
-xlab = "scores: (p * 1,000)",
-ylab = "p",
-xaxt = "n")
-axis(1, at = seq(minScore, maxScore, by = 10))
-abline(v = 900, lwd = 0.5)
-
-```
-
-![](./inst/img/score_hist_2.svg?sanitize=true "STRING score distribution (detail)")
-
-
-```R
-
-# Focus on the cutoff of scores at p == 0.9
-sum(tmp$score >= 880 & tmp$score < 890) # 5,706
-sum(tmp$score >= 890 & tmp$score < 900) # 5,666
-sum(tmp$score >= 900 & tmp$score < 910) # 315,010
-sum(tmp$score >= 910 & tmp$score < 920) # 83,756
-
-# We shall restrict our dataset to high-confidence edges with p >= 0.9
-
-tmp <- tmp[tmp$score >= 900, ]  # 648,304 rows of high-confidence edges
-
-```
-
-&nbsp;
-
-Are these edges duplicated? I.e. are there (a, b) and (b, a) edges in the dataset? The common way to test for that is to created a composite string of the two elements, sorted. Thus if we have an edge betwween `"this"` and `"that"`, and an edge between `"that"` and `"this"`, these edges both get mapped to a key `"that:this"` - and the duplication is easy to recognize.
+For more detailed validation, we need to look at the sequences of the PDB chains and their mapped transcripts and perform a multiple sequence alignment to see if they are identical or not. Then we also need to check the coordinates from Gencode for each PDB chain and the coordinates of each transcript retrieved from Ensembl. We will call the `validate()` function in order to do this.
 
 &nbsp;
 
 ```R
 
-sPaste <- function(x, collapse = ":") {
-return(paste(sort(x), collapse = collapse))
+# First retrieve the Gencode gene coordinate data for each PDB chain entry by reading the 'gencode.v29.basic.annotation.gff3` file
+
+gffData <- gffFile <- file.path("../data", "gencode.v29.basic.annotation.gff3")
+gffData <- rtracklayer::readGFF(gffFile)
+
+validate <- function(transcriptHGNC, chainID, myDB, gffData,
+showConsensus = TRUE, showPrint = TRUE) {
+
+### ============ Validate transcript and PDB chain sequences ============= ###
+
+# Retrieve the transcript ID to fetch the sequence from biomaRt
+transcriptID <- myDB$Transcripts[myDB$Transcripts$ID == transcriptHGNC,]$stableID
+
+# Retrieve transcript sequences using Ensembl
+mart <- biomaRt::useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+transcriptSeq <- biomaRt::getSequence(id = transcriptID, type = "ensembl_transcript_id",
+mart = mart, seqType = "peptide")
+
+# Retrieve PDB chain sequences through the annotated database
+chainSeq <- myDB$pdbChains[chainID == myDB$pdbChains$ID,]$Sequence
+
+
+# Use multiple sequence alignment to validate sequences
+msaSeqs <- Biostrings::AAStringSet(c(transcriptSeq[[1]], chainSeq))
+names(msaSeqs) <- c(as.character(transcriptHGNC), as.character(chainID))
+myMsa <- msa::msa(msaSeqs, method = "ClustalW",
+type = "protein")
+
+
+# Show the consensus sequence and generate printed MSA if
+# the user requests it
+if (showConsensus) {
+(msaConsensusSequence(myMsa))
 }
-tmp$key <- apply(tmp[ , c("a", "b")], 1, sPaste)
 
-length(tmp$key) # 648,304
-length(unique(tmp$key)) # 324,152  ... one half of the edges are duplicates!
+if (showPrint) {
+msaPrettyPrint(myMsa)
+}
 
-# We can remove those edges. And the keys.
-tmp <- tmp[( ! duplicated(tmp$key)), c("a", "b", "score") ]
+### ================ Validate gene coordinates =============== ###
+
+coordinateData <- gffData[!is.na(gffData$transcript_id) & !is.na(gffData$start)
+& !is.na(gffData$end),]
+coordinateData <- unique(gffData[grepl(transcriptID,
+gffData$transcript_id),][,c("transcript_id","start","end")])
+
+gffStart <- coordinateData$start
+gffEnd <- coordinateData$end
+
+pdbStart <- myDB$Transcripts[as.character(transcriptHGNC)
+== myDB$Transcripts$ID,]$start
+pdbEnd <- myDB$Transcripts[as.character(transcriptHGNC)
+== myDB$Transcripts$ID,]$end
+
+if (gffStart == pdbStart & gffEnd == pdbEnd) {
+message ("The coordinates are the same for the transcript and the
+PDB chain.")
+
+}
+
+else {
+message("The coordinates are not equal for the transcript and
+the PDB chain")
+}
+}
 ```
-
 &nbsp;
 
-Finally we map the ENSP IDs to HGNC symbols. Using our tool, this is a simple assignment:
+Lets test some PDB chains and transcript genes.
 
-&nbsp;
 
 ```R
+# Assume we would like to validate some transcripts for MT-ND2, a HGNC symbol gene
 
-tmp$a <- ensp2sym[tmp$a]
-tmp$b <- ensp2sym[tmp$b]
+transcripts <- myDB$Transcripts[myDB$Transcripts$hgncID == "MT-ND2",]
 
-# Validate:
-# how many rows could not be mapped
-any(grepl("ENSP", tmp$a))  # Nope
-any(grepl("ENSP", tmp$b))  # None left here either
-sum(is.na(tmp$a)) # 705
-sum(is.na(tmp$b)) # 3501
+# ID           version hgncID        stableID start  end
+# 2 MT-ND2-201 ENST00000361453.3 MT-ND2 ENST00000361453  4470 5511
 
-# we remove edges in which either one or the other node is NA to
-# create our final data:
-STRINGedges <- tmp[( ! is.na(tmp$a)) & ( ! is.na(tmp$b)), ] # 319,997 edges
+# Let looks at the transcript and it's PDB chains
+transcriptHGNC <- transcripts$ID
 
-# Done.
-# Save result
-save(STRINGedges, file = file.path("..", "data", "STRINGedges.RData"))
-# That's only 1.4 MB actually.
+chains <- myDB$pdbChains[myDB$pdbChains$transcriptHGNC == transcriptHGNC,]
+
+# ID transcriptHGNC
+# 3 5xtc.i     MT-ND2-201
+# 4 5xtd.i     MT-ND2-201
+
+# Let's use "5xtc.i" as our PDB chain we want to validate
+chainID <- chains$ID[1]
+
+validate(transcriptHGNC, chainID, myDB, gffData)
+
+
+
 
 ```
-
-&nbsp;
-
-#### 5 Network statistics
-
-Simple characterization of network statistics:
-
-&nbsp;
-
-```R
-
-# number of nodes
-(N <- length(unique(c(STRINGedges$a, STRINGedges$b))))  # 12,196 genes
-
-# coverage of human protein genes
-N * 100 / sum(HGNC$type == "protein")  # 63.4 %
-
-# number of edges
-nrow(STRINGedges)   # 319,997
-
-# any self-edges?
-any(STRINGedges$a == STRINGedges$b) # yes
-which(STRINGedges$a == STRINGedges$b)
-STRINGedges[which(STRINGedges$a == STRINGedges$b), ]
-#        a     b   score     # just one
-#  1 ZBED6 ZBED6     940
-
-
-# average number of interactions
-nrow(STRINGedges) / N  # 26.2  ... that seems a lot - how is this distributed?
-
-# degree distribution
-deg <- table(c(STRINGedges$a, STRINGedges$b))
-summary(as.numeric(deg))
-
-hist(deg, breaks=50,
-xlim = c(0, 1400),
-col = "#3fafb388",
-main = "STRING nodes degree distribution",
-xlab = "degree (undirected graph)",
-ylab = "Counts")
-rug(deg, col = "#EE5544")
-
-```
-
-![](./inst/img/STRING_degrees_1.svg?sanitize=true "STRING network degree distribution")
-
-
-## 6 Biological validation: network properties
-
-For more detailed validation, we need to look at network properties 
-
-&nbsp;
-
-```R
-
-sG <- igraph::graph_from_edgelist(matrix(c(STRINGedges$a,
-STRINGedges$b),
-ncol = 2,
-byrow = FALSE),
-directed = FALSE)
-
-# degree distribution
-dg <- igraph::degree(sG)
-
-# is this a scale-free distribution? Plot log(rank) vs. log(frequency)
-freqRank <- table(dg)
-x <- log10(as.numeric(names(freqRank)) + 1)
-y <- log10(as.numeric(freqRank))
-plot(x, y,
-type = "b",
-pch = 21, bg = "#A5F5CC",
-xlab = "log(Rank)", ylab = "log(frequency)",
-main = "Zipf's law governing the STRING network")
-
-# Regression line
-ab <- lm(y ~ x)
-abline(ab, col = "#FF000077", lwd = 0.7)
-
-```
-
-![](./inst/img/STRING_Zipf_plot_1.svg?sanitize=true "STRING score distribution (detail)")
 
 
 ```R
@@ -847,8 +868,8 @@ xSet <- c("AMBRA1", "ATG14", "ATP2A1", "ATP2A2", "ATP2A3", "BECN1", "BECN2",
 "VPS41", "VTI1B", "YKT6")
 
 # which example genes are not among the known nodes?
-x <- which( ! (xSet %in% c(STRINGedges$a, STRINGedges$b)))
-cat(sprintf("\t%s\t(%s)\n", HGNC[xSet[x], "sym"], HGNC[xSet[x], "name"]))
+x <- which( ! (xSet %in% myDB$HGNC$ID))
+cat(sprintf("\t%s\t(%s)\n", myDB$HGNC[xSet[x], "ID"], myDB$HGNC[xSet[x], "description"]))
 
 # BECN2    (beclin 2)
 # EPG5    (ectopic P-granules autophagy protein 5 homolog)
@@ -860,17 +881,6 @@ cat(sprintf("\t%s\t(%s)\n", HGNC[xSet[x], "sym"], HGNC[xSet[x], "name"]))
 # TMEM175    (transmembrane protein 175)
 # TPCN1    (two pore segment channel 1)
 # TPCN2    (two pore segment channel 2)
-
-# That make sense - generally fewer interactions have been recorded for
-# membrane proteins.
-
-
-# For our annotation, we select edges for which both nodes are part of the
-# example set:
-sel <- (STRINGedges$a %in% xSet) & (STRINGedges$b %in% xSet)
-xSetEdges <- STRINGedges[sel, c("a", "b")]
-# Statistics:
-nrow(xSetEdges)   # 206
 
 # Save the annotated set
 
@@ -894,89 +904,6 @@ nrow(myXset) # 206
 colnames(myXset) == c("a", "b") # TRUE TRUE
 
 ```
-
-&nbsp;
-
-#### 7.1 Biological validation: network properties
-
-Explore some network properties of the exmple gene set.
-
-&nbsp;
-
-```R
-
-# A graph ...
-sXG <- igraph::graph_from_edgelist(matrix(c(xSetEdges$a,
-xSetEdges$b),
-ncol = 2,
-byrow = FALSE),
-directed = FALSE)
-
-# degree distribution
-dg <- igraph::degree(sXG)
-hist(dg, col="#A5CCF5",
-main = "Node degrees of example gene network",
-xlab = "Degree", ylab = "Counts")
-
-# scale free? log(rank) vs. log(frequency)
-freqRank <- table(dg)
-x <- log10(as.numeric(names(freqRank)) + 1)
-y <- log10(as.numeric(freqRank))
-plot(x, y,
-type = "b",
-pch = 21, bg = "#A5CCF5",
-xlab = "log(Rank)", ylab = "log(frequency)",
-main = "Zipf's law governing the example gene network")
-
-# Regression line
-ab <- lm(y ~ x)
-abline(ab, col = "#FF000077", lwd = 0.7)
-
-```
-
-![](./inst/img/xGenes_Zipf_plot_1.svg?sanitize=true "xGenes degree distribution (log(#)/log(f))")
-
-
-```R
-
-# What are the ten highest degree nodes?
-x <- sort(dg, decreasing = TRUE)[1:10]
-cat(sprintf("\t%d:\t%s\t(%s)\n", x, names(x), HGNC[names(x), "name"]))
-
-# 15:    VAMP8    (vesicle associated membrane protein 8)
-# 15:    RAB7A    (RAB7A, member RAS oncogene family)
-# 12:    PIK3C3    (phosphatidylinositol 3-kinase catalytic subunit type 3)
-# 12:    GABARAP    (GABA type A receptor-associated protein)
-# 12:    SNAP29    (synaptosome associated protein 29)
-# 12:    STX17    (syntaxin 17)
-# 11:    GABARAPL2    (GABA type A receptor associated protein like 2)
-# 11:    BECN1    (beclin 1)
-# 11:    GABARAPL1    (GABA type A receptor associated protein like 1)
-# 10:    UVRAG    (UV radiation resistance associated)
-
-
-# Plot the network
-oPar <- par(mar= rep(0,4)) # Turn margins off
-set.seed(112358)
-plot(sXG,
-layout = igraph::layout_with_fr(sXG),
-vertex.color=heat.colors(max(igraph::degree(sXG)+1))[igraph::degree(sXG)+1],
-vertex.size = 1.5 + (1.2 * igraph::degree(sXG)),
-vertex.label.cex = 0.2 + (0.025 * igraph::degree(sXG)),
-edge.width = 2,
-vertex.label = igraph::V(sXG)$name,
-vertex.label.family = "sans",
-vertex.label.cex = 0.9)
-set.seed(NULL)
-par(oPar)
-
-# we see several cliques (or near-cliques), possibly indicative of
-# physical complexes.
-
-```
-
-![](./inst/img/xGenes_Network_1.svg?sanitize=true "xGenes functional interaction network")
-
 
 &nbsp;
 
