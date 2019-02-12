@@ -1,12 +1,16 @@
-#' fetchResolution.R
+#' fetchPDBXML.R
 #'
-#' @description
+#' \code{fetchPDBXML} Fetch the PDB data including Sequence and Resolution
+#' from PDB's API web services and return a dataframe including
+#' the PDB ID, chain identifier, Sequence and Resolution for each chain
+#' in the database.
 #'
-#' @param myDB
+#' Details.
 #'
-#' @param geneList
+#' @param myDB A list. The database which is being built.
 #'
-#' @export
+#' @return myPDBData; a data frame with the PDB data.
+#'
 
 fetchPDBXML <- function(myDB) {
 

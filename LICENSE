@@ -1,12 +1,17 @@
 MIT License
 
-functionTemplate.R: Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
-scriptTemplate.R:   Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
-rptTwee.R:          Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
-lseq.R:             Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
-test_lseq.R:        Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
-README.md:          Copyright (c) 2018  Boris Steipe <https://orcid.org/0000-0002-1134-6758>
-
+README.md:          Copyright (c) 2018  Judy Lee
+PDBdataset.R:       Copyright (c) 2018  Judy Lee
+addHGNC.R:          Copyright (c) 2018  Judy Lee
+addTranscripts.R:   Copyright (c) 2018  Judy Lee
+addpdbChain.R:      Copyright (c) 2018  Judy Lee
+addPDB.R:           Copyright (c) 2018  Judy Lee
+addPDBData.R:       Copyright (c) 2018  Judy Lee
+fetchPDBXML.R:      Copyright (c) 2018  Judy Lee
+validate.R:         Copyright (c) 2018  Judy Lee
+readXML.R:          Copyright (c) 2018  Judy Lee
+README.md:          Copyright (c) 2018  Judy Lee
+README.md:          Copyright (c) 2018  Judy Lee
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

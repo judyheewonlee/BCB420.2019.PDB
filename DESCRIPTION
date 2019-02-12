@@ -11,5 +11,10 @@ License: file LICENSE
 Encoding: UTF-8
 LazyData: true
 Suggests:
-    testthat
+    xml2,
+    rtracklayer,
+    data.table,
+    BiocManager,
+    BiomaRt,
+    msa
 RoxygenNote: 6.1.1

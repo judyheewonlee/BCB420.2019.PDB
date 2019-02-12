@@ -1,13 +1,16 @@
 #' addTranscripts.R
 #'
-#' @description
+#' \code{addTranscripts} Add the transcript data to the database.
+#' This includes the HGNC ID for the transcript, the stable ID, the
+#' stable ID with the version number, The corresponding HGNC symbols,
+#' and the start and end gene coordinates.
 #'
-#' @param myDB
+#' Details.
 #'
-#' @param geneList
+#' @param myDB A list. The database which is being built.
+#' @param martDF The dataframe containing BiomaRt data.
+#' @return myDB with the Transcript data added to the database.
 #'
-#' @export
-
 
 addTranscripts <- function(myDB, martDF) {
 

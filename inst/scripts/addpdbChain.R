@@ -1,7 +1,8 @@
 #' addpdbChain.R
 #'
-#' \code{addpdbChain} Add the PDB chains and the corresponding HGNC ID of transcripts
-#' to the database.
+#' \code{addpdbChain} Add the PDB chains and the corresponding HGNC ID
+#' of the genes and transcripts the PDB chain corresponds to. As well,
+#' add the PDB IDs of the PDB chains.
 #'
 #' Details.
 #'
@@ -17,6 +18,8 @@ addpdbChain <- function(myDB, martDF) {
   pdbChains <- data.frame(ID = martDF$PDB.ENSP.mappings,
                           transcriptHGNC =
                             martDF$HGNC.transcript.name.ID,
+                          hgncID = martDF$HGNC.symbol,
+                          PDB = martDF$PDB.ID,
                           stringsAsFactors = FALSE)
   pdbChains <- unique(data.table::as.data.table(pdbChains))
 

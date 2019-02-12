@@ -60,24 +60,25 @@ The package serves dual duty, as an RStudio project, as well as an R package tha
 |__BCB420.2019.PDB.Rproj
 |__DESCRIPTION              
 |__inst/
-|__extdata/               # ENSP ID to HGNC symbol mapping tool
-|__xSetEdges.tsv          # annotated example edges
-|__img/
-|__[...]                  # image sources for .md document
-|__scripts/
-|__PDBdataset.R           # utilities for ID mapping, more details below
-|__getData.R
-|__addHGNC.R
-|__addTranscripts.R
-|__addpdbChain.R
-|__addPDB.R
-|__addPDBData.R
-|__fetchPDBXML.R
-|__validate.R      
+    |__extdata/               # ENSP ID to HGNC symbol mapping tool
+        |__xSetEdges.tsv          # annotated example edges
+        |__img/
+            |__[...]                  # image sources for .md document
+    |__scripts/
+        |__PDBdataset.R           # utilities for ID mapping, more details below
+        |__getData.R
+        |__addHGNC.R
+        |__addTranscripts.R
+        |__addpdbChain.R
+        |__addPDB.R
+        |__addPDBData.R
+        |__fetchPDBXML.R
+        |__validate.R  
+        |__readXML.R
 |__LICENSE
 |__NAMESPACE
 |__R/
-|__zzz.R
+    |__zzz.R
 |__README.md                    # this file
 
 ```
@@ -138,6 +139,10 @@ The Gencode dataset also includes several annotations in the human and mouse gen
 3. **Transcript End**: The end coordinate of the transcript in a gene given by bp
 
 The Gencode annotationa will be used in order to validate the data in the workflow by comparing these annotations with the same annotations provided by Ensembl.
+
+Here is a relational model showing the data and how it will be layed out in the dataset.
+
+![](./inst/img/HGNC-PDB1.0.svg?sanitize=true "PDB-HGNC dataset annotation Relational Model")
 
 &nbsp;
 
@@ -232,16 +237,6 @@ if (!requireNamespace("msa", quietly = TRUE)) {
 }
 ```
 
-**`igraph`** is THE go-to package for everything graph related. We use it here to
-compute some statistics on the STRING- and example graphs and plot.
-&nbsp;
-
-```R
-if (! requireNamespace("igraph")) {
-    install.packages("igraph")
-}
-```
-
 &nbsp;
 
 Next we source a utility functions that can be run in order to map and create the PDB-HGNC database.
@@ -258,6 +253,7 @@ source("inst/scripts/addpdbChain.R")
 source("inst/scripts/addPDB.R")
 source("inst/scripts/addPDBData.R")
 source("inst/scripts/fetchPDBXML.R")
+source("inst/scripts/readXML.R")
 source("inst/scripts/validate.R")
 ```
 
@@ -324,9 +320,9 @@ uPDB <- unique(martDF$PDB.ID) # 16911
 
 We first fetch all unique HGNC symbols and create a dataframe entry for the database containing the HGNC symbols with the corresponding annotations: **HGNC symbol**, **Gene Description**, **Gene Stable ID**, **Gene Stable ID Version**, and **Gene name**. Every HGNC symbol can map to a large number of transcripts, as genes are constructed from many transcripts. Thus every HGNC symbol will have multiple transcripts but each transcript will only map to a single HGNC symbol. 
 
-Once we generate the dataframe containing the HGNC symbols, we map the **transcript IDs** to several HGNC symbols. In this data frame, we will include **Transcript Stable ID**, **Transcript Stable ID Version**, **Transcript HGNC ID**, **Transcript Start**, and **Transcript End** as annotations. Every transcript can have multiple PDB chain IDs and every PDB chain can also have multiple transcripts. We must take this into account when building the database.
+Once we generate the dataframe containing the HGNC symbols, we map the **transcript IDs** to several HGNC symbols. In this data frame, we will include **Transcript HGNC ID**, **Transcript Stable ID Version**, **Transcript Stable ID**, **Transcript Start**, and **Transcript End** as annotations. Every transcript can have multiple PDB chain IDs and every PDB chain can also have multiple transcripts. We must take this into account when building the database.
 
-After we generate the transcript table, we map the PDB chains to each transcript ID. In the data frame containing the PDB chains, we will add the annotations: **PDB-ENSP mapping (chain ID)**, **Transcript IDs**, **Sequence** and **Resolution**. The **Sequence** and **Resolution** will be retrieved through the PDB API services discussed later. 
+After we generate the transcript table, we map the PDB chains to each transcript ID. We also want to add the corresponding HGNC symbols and PDB ID's which will help link transcript/chain level data to gene data. In the data frame containing the PDB chains, we will add the annotations: **PDB-ENSP mapping (chain ID)**, **Transcript HGNC IDs**, **HGNC Symbols**, **PDB IDs** **Sequences** and **Resolutions**. The **Sequence** and **Resolution** will be retrieved through the PDB API services discussed later. 
 
 Lastly, we map each PDB-chain to a PDB ID to the general PDB structure. Oddly, some entries in the BiomaRt dataset have different corresponding chain ID's to the PDB ID. Most cases, the PDB ID corresponds to the PDB chain. For example: 
 
@@ -486,16 +482,17 @@ Each Transcript has several corresponding PDB chains and each PDB chain can be m
 &nbsp;
 
 ```R
-addPdbChain <- function(myDB, martDF) {
+addpdbChain <- function(myDB, martDF) {
 
     # Add the PDB chains and their corresponding
-    # transcript IDs to the database
+    # transcript HGNC, HGNC symbols and PDB symbol to the database
 
     pdbChains <- data.frame(ID = martDF$PDB.ENSP.mappings,
-                            transcriptHGNC =
-                            martDF$HGNC.transcript.name.ID,
-                            stringsAsFactors = FALSE)
-                            
+                    transcriptHGNC =
+                    martDF$HGNC.transcript.name.ID,
+                    HGNC = martDF$HGNC.symbol,
+                    PDB = martDF$PDB.ID,
+                    stringsAsFactors = FALSE)
     # Use the data.table package in order to call unique quickly over the large dataset
     pdbChains <- unique(data.table::as.data.table(pdbChains))
 
@@ -715,7 +712,7 @@ load(file = file.path("inst", "extdata", "pdb2sym.RData"))
 ```
 &nbsp;
 
-## 6 Biological Validation for Annotations: Multiple Sequence Alignments and Coordinate Checking
+## 5 Biological Validation for Annotations: Multiple Sequence Alignments and Coordinate Checking
 
 For more detailed validation, we need to look at the sequences of the PDB chains and their mapped transcripts and perform a multiple sequence alignment to see if they are identical or not. Then we also need to check the coordinates from Gencode for each PDB chain and the coordinates of each transcript retrieved from Ensembl. We will call the `validate()` function in order to do this.
 
@@ -755,11 +752,7 @@ type = "protein")
 # Show the consensus sequence and generate printed MSA if
 # the user requests it
 if (showConsensus) {
-(msaConsensusSequence(myMsa))
-}
-
-if (showPrint) {
-msaPrettyPrint(myMsa)
+print(msaConsensusSequence(myMsa))
 }
 
 ### ================ Validate gene coordinates =============== ###
@@ -816,33 +809,40 @@ chainID <- chains$ID[1]
 
 validate(transcriptHGNC, chainID, myDB, gffData)
 
+# Console Output
+This is the Consensus Sequence
+?NPLAQPVIYSTIFAGTLITALSSHWFFTWVGLEMNMLAFIPVLTKKMNPRSTEAAIKYFLTQATASMILLMAILFNNMLSGQWTMTNTTNQYSSLMIMMAMAMKLGMAPFHFWVPEVTQGTPLTSGLLLLTWQKLAPISIMYQISPSLNV?LLLTLSILSIMAGSWGGLNQTQLRKILAYSSITHMGWMMAVLPYNPNMTILNLTIYIILTTTAFLLLNLNSSTTTLLLSRTWNKLTWLTPLIPSTLLSLGGLPPLTGFLPKWAIIEEFTKNNSLIIPTIMATITLLNLYFYLRLIYSTSITLLPMSNNVKMKWQFEHTKPTPFLPTLIALTTLLLPISPFMLMIL
+The coordinates are the same for the transcript and the
+PDB chain.
 
+# The Consensus sequence shows the conserved residues in a sequence. It seems that there are two
+# residues that are different comparing the transcript recieved from Ensembl vs the chain sequence
+# from the PDB. This may be due to the fact that we are compraing protein sequences which are
+# translated from Amino acid sequences which may cause slight variability.
 
+# Lets look at the other chain matching the transcript
 
-```
+chainID <- chains$ID[2]
 
+validate(transcriptHGNC, chainID, myDB, gffData)
 
-```R
-# What are the ten highest degree nodes?
-x <- sort(dg, decreasing = TRUE)[1:10]
-cat(sprintf("\t%d:\t%s\t(%s)\n", x, names(x), HGNC[names(x), "name"]))
-# 1343:    RPS27A    (ribosomal protein S27a)
-# 1339:    UBA52    (ubiquitin A-52 residue ribosomal protein fusion product 1)
-# 1128:    UBC    (ubiquitin C)
-# 1124:    UBB    (ubiquitin B)
-# 918:    GNB1    (G protein subunit beta 1)
-# 894:    GNGT1    (G protein subunit gamma transducin 1)
-# 562:    APP    (amyloid beta precursor protein)
-# 550:    CDC5L    (cell division cycle 5 like)
-# 530:    GNG2    (G protein subunit gamma 2)
-# 526:    RBX1    (ring-box 1)
+# Console Output
+This is the Consensus Sequence
+?NPLAQPVIYSTIFAGTLITALSSHWFFTWVGLEMNMLAFIPVLTKKMNPRSTEAAIKYFLTQATASMILLMAILFNNMLSGQWTMTNTTNQYSSLMIMMAMAMKLGMAPFHFWVPEVTQGTPLTSGLLLLTWQKLAPISIMYQISPSLNV?LLLTLSILSIMAGSWGGLNQTQLRKILAYSSITHMGWMMAVLPYNPNMTILNLTIYIILTTTAFLLLNLNSSTTTLLLSRTWNKLTWLTPLIPSTLLSLGGLPPLTGFLPKWAIIEEFTKNNSLIIPTIMATITLLNLYFYLRLIYSTSITLLPMSNNVKMKWQFEHTKPTPFLPTLIALTTLLLPISPFMLMIL
+The coordinates are the same for the transcript and the
+PDB chain.
 
+# These chains are the exact same sequence. This is valid even though the PDB chains may come from
+# different PDB structures, usually those structures are identical but placed in different
+# environments. They may also be structure which change conformation due to binding. Nonetheless, both
+# chains are mapped to the HGNC transcript symbol and are both valid.
 
+# You may perform validation over any of the genes in the dataset. 
 ```
 
 &nbsp;
 
-## 7 Annotation of the example gene set
+## 6 Annotation of the example gene set
 
 To conclude, we annotate the example gene set, validate the annotation, and store the data in an edge-list format.
 
@@ -851,7 +851,7 @@ To conclude, we annotate the example gene set, validate the annotation, and stor
 ```R
 
 # The specification of the sample set is copy-paste from the 
-# BCB420 resources project.
+# Professor Boris Steipe's String database project
 
 xSet <- c("AMBRA1", "ATG14", "ATP2A1", "ATP2A2", "ATP2A3", "BECN1", "BECN2",
 "BIRC6", "BLOC1S1", "BLOC1S2", "BORCS5", "BORCS6", "BORCS7",
@@ -867,65 +867,48 @@ xSet <- c("AMBRA1", "ATG14", "ATP2A1", "ATP2A2", "ATP2A3", "BECN1", "BECN2",
 "VAMP8", "VAPA", "VPS11", "VPS16", "VPS18", "VPS33A", "VPS39",
 "VPS41", "VTI1B", "YKT6")
 
-# which example genes are not among the known nodes?
-x <- which( ! (xSet %in% myDB$HGNC$ID))
-cat(sprintf("\t%s\t(%s)\n", myDB$HGNC[xSet[x], "ID"], myDB$HGNC[xSet[x], "description"]))
-
-# BECN2    (beclin 2)
-# EPG5    (ectopic P-granules autophagy protein 5 homolog)
-# LAMP3    (lysosomal associated membrane protein 3)
-# LAMP5    (lysosomal associated membrane protein family member 5)
-# PLEKHM1    (pleckstrin homology and RUN domain containing M1)
-# RUBCNL    (rubicon like autophagy enhancer)
-# TIFA    (TRAF interacting protein with forkhead associated domain)
-# TMEM175    (transmembrane protein 175)
-# TPCN1    (two pore segment channel 1)
-# TPCN2    (two pore segment channel 2)
+# W
+x <- which((xSet %in% myDB$HGNC$ID))
+xSetPDB <- myDB$pdbChains[xSet[x] %in% myDB$pdbChains$transcriptHGNC, c("hgncID", "transcriptHGNC", "ID", "PDB", "Sequences", "Resolution")]
 
 # Save the annotated set
 
 writeLines(c("a\tb",
-sprintf("%s\t%s", xSetEdges$a, xSetEdges$b)),
-con = "xSetEdges.tsv")
+sprintf("%s\t%s\t%s\t%s\t%s\t%s\n", xSetPDB$hgncID, xSetPDB$transcriptHGNC, xSetPDB$ID, xSetPDB$PDB, xSetPDB$Sequences, xSetPDB$Resolution)),
+con = "xSetPDB.tsv")
 
 # The data set can be read back in again (in an RStudio session) with
-myXset <- read.delim(file.path("inst", "extdata", "xSetEdges.tsv"),
+myXset <- read.delim(file.path("inst", "extdata", "xSetPDB.tsv"),
 stringsAsFactors = FALSE)
 
 # From an installed package, the command would be:
 myXset <- read.delim(system.file("extdata",
-"xSetEdges.tsv",
-package = "BCB420.2019.STRING"),
+"xSetPDB.tsv",
+package = "BCB420.2019.PDB"),
 stringsAsFactors = FALSE)
-
-
-# confirm
-nrow(myXset) # 206
-colnames(myXset) == c("a", "b") # TRUE TRUE
 
 ```
 
 &nbsp;
 
-## 8 References
+## 7 References
 
 &nbsp;
 
-Example code for biomaRt was taken taken from `BIN-PPI-Analysis.R` and example code for work with igraph was taken from `FND-MAT-Graphs_and_networks.R`, both in the [ABC-Units project](https://github.com/hyginn/ABC-units) (Steipe, 2016-1019). A preliminary version of a STRING import script was written as [starter code for the 2018 BCB BioHacks Hackathon](https://github.com/hyginn/ABC-units) at the UNiversity of Toronto (Steipe, 2018) - this script draws on the former.
+Sample code for writing annotating the sample gene set was taken from Professor Boris Steipe's STRING database annotation R package linked [here](https://github.com/hyginn/BCB420.2019.STRING). 
 
 &nbsp;
 
-* Szklarczyk, D., Gable, A. L., Lyon, D., Junge, A., Wyder, S., Huerta-Cepas, J., Simonovic, M., Doncheva, N. T., Morris, J. H., Bork, P., Jensen, L. J., & von Mering, C. (2019). STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets. [_Nucleic acids research_, D1, D607-D613](https://academic.oup.com/nar/article/47/D1/D607/5198476).
+*  Frankish A. et al. (2018) GENCODE reference annotation for the human and mouse genomes. Nucleic Acids Research, 47: 766-773.
 
-* Huang, J. K., Carlin, D. E., Yu, M. K., Zhang, W., Kreisberg, J. F., Tamayo, P., & Ideker, T. (2018). Systematic Evaluation of Molecular Networks for Discovery of Disease Genes. _Cell systems_, 4, 484-495.e5.
+*  H.M. Berman, J. Westbrook, Z. Feng, G. Gilliland, T.N. Bhat, H. Weissig, I.N. Shindyalov, P.E. Bourne.
+     (2000) The Protein Data Bank Nucleic Acids Research, 28: 235-242.
 
 &nbsp;
 
-## 9 Acknowledgements
+## 8 Acknowledgements
 
-Thanks to Simon Kågedal's very useful [PubMed to APA reference tool](http://helgo.net/simon/pubmed/).
-
-User `Potherca` [posted on Stack](https://stackoverflow.com/questions/13808020/include-an-svg-hosted-on-github-in-markdown) how to use the parameter `?sanitize=true` to display `.svg` images in github markdown.
+User `Ben Bolker` [posted on Stack](https://stackoverflow.com/questions/7060272/split-up-a-dataframe-by-number-of-rows) how to  split a dataframe by a distinct amount of rows.
 
 &nbsp;
 

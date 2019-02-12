@@ -1,12 +1,15 @@
 #' addHGNC.R
 #'
-#' @description
+#' \code{addHGNC} Add the HGNC symbols to the data set along
+#' with the corresponding gene description, stable ID,
+#' stable version ID and gene name.
 #'
-#' @param myDB
+#' Details.
 #'
-#' @param geneList
+#' @param myDB A list. The database which is being built.
+#' @param martDF The dataframe containing BiomaRt data.
+#' @return myDB with the HGNC data added to the database.
 #'
-#' @export
 
 addHGNC <- function(myDB, martDF) {
 

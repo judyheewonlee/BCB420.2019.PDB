@@ -13,12 +13,11 @@
 #'
 #' @param myDB The annotated database loaded in the environment
 #'
+#' @param gffData A dataframe containing the Gencode data imported
+#' manually by the user
+#'
 #' @param showConsensus A boolean value determining if the user
 #' would like to see the consensus sequence.
-#' Set to TRUE automatically
-#'
-#' @param showPrint A boolean value determining if the user
-#' would like to have a PDF file made of the MSA.
 #' Set to TRUE automatically
 #'
 #' @export
@@ -26,6 +25,8 @@
 
 validate <- function(transcriptHGNC, chainID, myDB, gffData,
                      showConsensus = TRUE) {
+
+  library(msa)
 
   ### ============ Validate transcript and PDB chain sequences ============= ###
 
@@ -51,7 +52,7 @@ validate <- function(transcriptHGNC, chainID, myDB, gffData,
   # Show the consensus sequence and generate printed MSA if
   # the user requests it
   if (showConsensus) {
-    print(msaConsensusSequence(myMsa))
+    cat(sprintf("This is the Consensus Sequence\n %s\n", msaConsensusSequence(myMsa)))
   }
 
 
@@ -71,13 +72,13 @@ validate <- function(transcriptHGNC, chainID, myDB, gffData,
                              == myDB$Transcripts$ID,]$end
 
   if (gffStart == pdbStart & gffEnd == pdbEnd) {
-    message ("The coordinates are the same for the transcript and the
+    cat("The coordinates are the same for the transcript and the
              PDB chain.")
 
   }
 
   else {
-    message("The coordinates are not equal for the transcript and
+    cat("The coordinates are not equal for the transcript and
             the PDB chain")
   }
 }

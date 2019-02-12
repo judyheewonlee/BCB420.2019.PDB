@@ -1,9 +1,15 @@
 #' getData.R
 #'
-#' @description
+#' \code{getData} Retrieve the data from the mart_export.txt file
+#' from BiomaRts webpage and download services. Guidelines
+#' provided in the readMe. \code{getData} returns a
+#' dataframe containing the biomaRt data.
 #'
+#' Details.
 #'
-#' @export
+#' @return martDF; a dataframe containing the biomaRt data
+#' for homosapien genes
+#'
 
 getData <- function() {
 
