@@ -61,7 +61,7 @@ The package serves dual duty, as an RStudio project, as well as an R package tha
 |__DESCRIPTION              
 |__inst/
     |__extdata/               # ENSP ID to HGNC symbol mapping tool
-        |__xSetEdges.tsv          # annotated example edges
+        |__xSetPDB.tsv          # annotated example edges
     |__img/
         |__[...]                  # image sources for .md document
     |__scripts/
