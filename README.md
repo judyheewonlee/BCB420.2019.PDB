@@ -60,8 +60,8 @@ The package serves dual duty, as an RStudio project, as well as an R package tha
 |__BCB420.2019.PDB.Rproj
 |__DESCRIPTION              
 |__inst/
-    |__extdata/               # ENSP ID to HGNC symbol mapping tool
-        |__xSetPDB.tsv          # annotated example edges
+    |__extdata/               # PDB ID to HGNC symbol mapping 
+        |__xSetPDB.tsv          # annotated examples
     |__img/
         |__[...]                  # image sources for .md document
     |__scripts/
