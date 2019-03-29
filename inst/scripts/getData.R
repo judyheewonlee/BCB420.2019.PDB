@@ -16,7 +16,15 @@ getData <- function() {
   message("Reading Ensembl data...")
   martFile <- file.path("../data", "mart_export.txt")
 
-  martDF <- read.csv(martFile, stringsAsFactors = FALSE)
+  if (!file.exists(martFile)) {
+        stop("The bioMart file is missing, please refer to the
+        readME for instructions on installing the ensembl data")
+      }
+  
+  else {
+      martDF <- read.csv(martFile, stringsAsFactors = FALSE)
+  }
+  
 
   # Remove any sapien genes that do not have a HGNC symbol
   # or PDB entry
