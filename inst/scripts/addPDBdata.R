@@ -28,18 +28,6 @@ addPDBdata <- function(myDB) {
   myDB$pdbChains$Resolution <- myPDBData[sel,]$Resolution
   myDB$pdbChains$Sequences <- myPDBData[sel,]$Sequence
 
-  # for (chain in unique(myDB$pdbChains$ID)) {
-  #   pdbID <- toupper(gsub("\\..*","", chain))
-  #
-  #   resolution <- unique(myPDBData[pdbID
-  #                         == myPDBData$IDs,]$Resolution)
-  #
-  #   chainSeq <- unique(myPDBData[sub('.*\\.', '', chain) == myPDBData$ChainIDs &
-  #                         pdbID == myPDBData$IDs,]$Sequence)[1]
-  #
-  #   myDB$pdbChains[chain == myDB$pdbChains$ID,]$Resolution <- resolution
-  #   myDB$pdbChains[chain == myDB$pdbChains$ID,]$Sequences <- chainSeq
-  # }
 
   return(myDB)
 

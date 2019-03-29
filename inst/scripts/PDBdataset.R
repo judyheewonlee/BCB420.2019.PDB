@@ -1,10 +1,11 @@
 #' PDBdataset.R
 #'
-#' @description
+#' \code{PDBdataset} Generates a PDB-HGNC mapping database linking HGNC transcripts
+#' to PDB transcript identifiers. The resulting database also contains several
+#' annotations about each transcript such as it's basic description and
+#' PDB sequences.
 #'
 #' @export
-#'
-#'
 
 PDBdataset <- function() {
 
