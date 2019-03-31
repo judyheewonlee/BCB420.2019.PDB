@@ -26,8 +26,6 @@
 validate <- function(transcriptHGNC, chainID, myDB, gffData,
                      showConsensus = TRUE) {
 
-  library(msa)
-
   ### ============ Validate transcript and PDB chain sequences ============= ###
 
   # Retrieve the transcript ID to fetch the sequence from biomaRt
@@ -52,7 +50,8 @@ validate <- function(transcriptHGNC, chainID, myDB, gffData,
   # Show the consensus sequence and generate printed MSA if
   # the user requests it
   if (showConsensus) {
-    cat(sprintf("This is the Consensus Sequence\n %s\n", msaConsensusSequence(myMsa)))
+    cat(sprintf("This is the Consensus Sequence\n %s\n",
+                msa::msaConsensusSequence(myMsa)))
   }
 
 

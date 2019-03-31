@@ -6,7 +6,7 @@ Date: 2019-01-22
 Authors@R: c(
     person("Heewon", "Lee", email = "heewon.lee@utoronto.ca", role = c("aut", "cre"))
     )
-Description: 
+Description: HGNC-PDB ID mapping tool and database for BCB420 database project 2019. This tool links HGNC IDs to corresponding PDB ID's and several different annotations about each entries sequence and description.
 License: file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -15,6 +15,7 @@ Suggests:
     rtracklayer,
     data.table,
     BiocManager,
-    BiomaRt,
-    msa
+    biomaRt,
+    msa,
+    Biostrings
 RoxygenNote: 6.1.1

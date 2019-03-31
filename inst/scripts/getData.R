@@ -14,7 +14,7 @@
 getData <- function() {
 
   message("Reading Ensembl data...")
-  martFile <- file.path("..", "data", "mart_export.txt")
+  martFile <- file.path("../data", "mart_export.txt.zip")
 
   if (!file.exists(martFile)) {
         stop("The bioMart file is missing, please refer to the
@@ -22,7 +22,8 @@ getData <- function() {
       }
 
   else {
-      martDF <- utils::read.csv(martFile, stringsAsFactors = FALSE)
+      utils::unzip(martFile, )
+      martDF <- read.csv(martFile, stringsAsFactors = FALSE)
   }
 
 
