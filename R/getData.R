@@ -14,17 +14,20 @@
 getData <- function() {
 
   message("Reading Ensembl data...")
-  martFile <- file.path("../data", "mart_export.txt")
+  martZipFile <- system.file("extdata", "mart_export.txt.zip",
+                          package = "BCB420.2019.PDB")
 
-  if (!file.exists(martFile)) {
+  if (!file.exists(martZipFile)) {
         stop("The bioMart file is missing, please refer to the
         readME for instructions on installing the ensembl data")
       }
-  
+
   else {
+      utils::unzip(martZipFile)
+      martFile <- file.path(getwd(), "mart_export.txt")
       martDF <- read.csv(martFile, stringsAsFactors = FALSE)
   }
-  
+
 
   # Remove any sapien genes that do not have a HGNC symbol
   # or PDB entry
